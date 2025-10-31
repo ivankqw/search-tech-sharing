@@ -1,0 +1,5 @@
+# Large datasets / local artifacts
+data/free_company_dataset.csv
+data/free_company_dataset.csv:sec.endpointdlp
+data/free_company_dataset_clean.csv
+data/free_company_dataset_clean.tsv
