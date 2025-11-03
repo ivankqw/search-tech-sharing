@@ -6,6 +6,7 @@ from pathlib import Path
 INPUT = Path("data/free_company_dataset.csv")
 OUTPUT = Path("data/free_company_dataset_clean.tsv")
 
+
 def main() -> int:
     if not INPUT.exists():
         print(f"input file not found: {INPUT}", file=sys.stderr)
@@ -16,7 +17,10 @@ def main() -> int:
         return 1
 
     total = 0
-    with INPUT.open("r", encoding="utf-8", newline="") as src, OUTPUT.open("w", encoding="utf-8", newline="") as dst:
+    with (
+        INPUT.open("r", encoding="utf-8", newline="") as src,
+        OUTPUT.open("w", encoding="utf-8", newline="") as dst,
+    ):
         reader = csv.reader(src, escapechar="\\")
         for row in reader:
             if len(row) == 9:
@@ -30,7 +34,12 @@ def main() -> int:
                     row = row[:10]
             clean = []
             for value in row:
-                clean.append(value.replace("\t", " ").replace("\r", " ").replace("\n", " ").strip())
+                clean.append(
+                    value.replace("\t", " ")
+                    .replace("\r", " ")
+                    .replace("\n", " ")
+                    .strip()
+                )
             dst.write("\t".join(clean) + "\n")
             total += 1
             if total % 500000 == 0:

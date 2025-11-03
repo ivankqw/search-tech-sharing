@@ -1,0 +1,26 @@
+Changed database context to 'SearchDemo'.
+Entities in scope: 273943
+Sample queries collected: 50
+method                           samples     min_ms               p50_ms               p95_ms               avg_ms               max_ms               avg_rows_returned   
+-------------------------------- ----------- -------------------- -------------------- -------------------- -------------------- -------------------- --------------------
+fts_typeahead                             50                 .000                4.243               13.055                4.911               59.480                 4.00
+like_infix                                33                4.248              187.712              397.636              211.971              423.293                 1.00
+like_prefix                               50                 .000                 .000                 .000                 .082                4.107                 1.00
+Top 5 slowest queries per method (ms):
+method                           query                                                                                                duration_ms          rows_returned
+-------------------------------- ---------------------------------------------------------------------------------------------------- -------------------- -------------
+fts_typeahead                    100%                                                                                                               59.480            10
+fts_typeahead                    appli                                                                                                              20.981            10
+fts_typeahead                    1000                                                                                                               16.701            10
+fts_typeahead                    zero                                                                                                                8.599            10
+fts_typeahead                    0xppl                                                                                                               8.560             2
+like_infix                       0te                                                                                                               423.293             1
+like_infix                       00m                                                                                                               405.626             1
+like_infix                       iqin                                                                                                              392.310             1
+like_infix                       xky                                                                                                               386.915             1
+like_infix                       00fa                                                                                                              384.445             1
+like_prefix                      appli                                                                                                               4.107             1
+like_prefix                      sheng                                                                                                                .000             1
+like_prefix                      01ai                                                                                                                 .000             1
+like_prefix                      011h                                                                                                                 .000             1
+like_prefix                      zero                                                                                                                 .000             1

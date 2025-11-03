@@ -1,0 +1,26 @@
+Changed database context to 'SearchBenchmark'.
+Entities in scope: 34234737
+Sample queries collected: 50
+method                           samples     min_ms               p50_ms               p95_ms               avg_ms               max_ms               avg_rows_returned   
+-------------------------------- ----------- -------------------- -------------------- -------------------- -------------------- -------------------- --------------------
+fts_typeahead                             50                 .000               57.537              652.219              450.812            13685.482                 9.00
+like_infix                                42                 .000              155.130             5250.369             1316.800            15380.371                 1.00
+like_prefix                               50                 .000                 .000                 .000                 .175                4.491                 1.00
+Top 5 slowest queries per method (ms):
+method                           query                                                                                                duration_ms          rows_returned
+-------------------------------- ---------------------------------------------------------------------------------------------------- -------------------- -------------
+fts_typeahead                    ag├¬n                                                                                                           13685.482            10
+fts_typeahead                    σ▒▒σ╕                                                                                                            4224.009            10
+fts_typeahead                    θæ½τö                                                                                                             938.577            10
+fts_typeahead                    globa                                                                                                             302.226            10
+fts_typeahead                    east                                                                                                              300.299            10
+like_infix                       ttpo                                                                                                            15380.371             1
+like_infix                       nkba                                                                                                             6327.042             1
+like_infix                       zort                                                                                                             5347.697             1
+like_infix                       rmoc                                                                                                             3401.141             1
+like_infix                       toku                                                                                                             2881.869             1
+like_prefix                      infin                                                                                                               4.491             1
+like_prefix                      indus                                                                                                               4.264             1
+like_prefix                      seni                                                                                                                 .000             1
+like_prefix                      mygir                                                                                                                .000             1
+like_prefix                      multi                                                                                                                .000             1

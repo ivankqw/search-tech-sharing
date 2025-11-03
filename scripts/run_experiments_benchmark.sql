@@ -1,19 +1,17 @@
-:setvar TargetDb SearchDemo
-
-USE $(TargetDb);
+USE SearchBenchmark;
 GO
 
 SET NOCOUNT ON;
 
-DECLARE @SampleCount INT = 50;   -- number of prefix samples
-DECLARE @TopK INT = 10;          -- results per query
+DECLARE @SampleCount INT = 50;
+DECLARE @TopK INT = 10;
 
 DECLARE @entityCount BIGINT = (SELECT COUNT(*) FROM dbo.Entities);
 PRINT N'Entities in scope: ' + CONVERT(NVARCHAR(30), @entityCount);
 
 IF @entityCount = 0
 BEGIN
-    RAISERROR (N'dbo.Entities is empty. Run load_csv + fts first.', 16, 1);
+    RAISERROR (N'dbo.Entities is empty in SearchBenchmark.', 16, 1);
     RETURN;
 END
 
@@ -34,7 +32,7 @@ SELECT TOP (@SampleCount)
         WHEN LEN(token.clean_token) >= 5 THEN SUBSTRING(token.clean_token, 2, 3)
         ELSE NULL
     END AS infix_fragment
-FROM dbo.Entities AS e
+FROM dbo.Entities AS e WITH (NOLOCK)
 CROSS APPLY
 (
     SELECT TOP (1)
@@ -58,7 +56,7 @@ PRINT N'Sample queries collected: ' + CONVERT(NVARCHAR(30), @total);
 
 IF @total = 0
 BEGIN
-    RAISERROR (N'Unable to derive sample prefixes from the data set.', 16, 1);
+    RAISERROR (N'Unable to derive sample prefixes from SearchBenchmark data.', 16, 1);
     RETURN;
 END
 
@@ -104,32 +102,30 @@ BEGIN
         CONTINUE;
     END
 
-    -- FTS (stored procedure)
     DELETE FROM @hits;
     SET @start = SYSDATETIME();
-INSERT INTO @hits (id, type, name, alt_names, country, rank_score, score)
-EXEC dbo.SearchEntities
-    @q = @prefix,
-    @top = @TopK;
+    INSERT INTO @hits (id, type, name, alt_names, country, rank_score, score)
+    EXEC dbo.SearchEntities
+        @q = @prefix,
+        @top = @TopK;
     SET @stop = SYSDATETIME();
     SET @duration = 1.0 * DATEDIFF_BIG(MICROSECOND, @start, @stop) / 1000.0;
     SELECT @rows = COUNT(*) FROM @hits;
     INSERT INTO @metrics (method, query, duration_ms, rows_returned)
     VALUES ('fts_typeahead', @prefix, @duration, @rows);
 
-    -- LIKE prefix (sargable)
     DELETE FROM @hits;
     SET @start = SYSDATETIME();
-INSERT INTO @hits (id, type, name, alt_names, country, rank_score, score)
-SELECT TOP (@TopK)
-    e.id,
-    e.type,
-    e.name,
-    e.alt_names,
-    e.country,
-    0,
-    0
-FROM dbo.Entities AS e
+    INSERT INTO @hits (id, type, name, alt_names, country, rank_score, score)
+    SELECT TOP (@TopK)
+        e.id,
+        e.type,
+        e.name,
+        e.alt_names,
+        e.country,
+        0,
+        0
+    FROM dbo.Entities AS e WITH (NOLOCK)
     WHERE e.name LIKE @prefix + N'%'
     ORDER BY e.name;
     SET @stop = SYSDATETIME();
@@ -138,21 +134,20 @@ FROM dbo.Entities AS e
     INSERT INTO @metrics (method, query, duration_ms, rows_returned)
     VALUES ('like_prefix', @prefix, @duration, @rows);
 
-    -- LIKE infix (non-sargable)
     IF @infix IS NOT NULL AND LEN(@infix) > 0
     BEGIN
         DELETE FROM @hits;
         SET @start = SYSDATETIME();
-INSERT INTO @hits (id, type, name, alt_names, country, rank_score, score)
-SELECT TOP (@TopK)
-    e.id,
-    e.type,
-    e.name,
-    e.alt_names,
-    e.country,
-    0,
-    0
-FROM dbo.Entities AS e
+        INSERT INTO @hits (id, type, name, alt_names, country, rank_score, score)
+        SELECT TOP (@TopK)
+            e.id,
+            e.type,
+            e.name,
+            e.alt_names,
+            e.country,
+            0,
+            0
+        FROM dbo.Entities AS e WITH (NOLOCK)
         WHERE e.name LIKE N'%' + @infix + N'%'
         ORDER BY e.name;
         SET @stop = SYSDATETIME();
@@ -212,6 +207,4 @@ SELECT
 FROM ranked
 WHERE rn <= 5
 ORDER BY method, duration_ms DESC;
-
--- Sample result dump omitted to keep benchmark output concise.
 GO

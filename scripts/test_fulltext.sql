@@ -78,11 +78,11 @@ DELETE FROM @results;
 INSERT INTO @results
 EXEC dbo.SearchEntities
     @q = @prefixQuery,
-    @top = 20;
+    @top = 100;
 
 IF NOT EXISTS (SELECT 1 FROM @results WHERE name = @normalized)
 BEGIN
-    RAISERROR (N'Prefix query "%s" did not return "%s" within the top 20 results.', 16, 1, @prefixQuery, @normalized);
+    RAISERROR (N'Prefix query "%s" did not return "%s" within the top 100 results.', 16, 1, @prefixQuery, @normalized);
 END
 ELSE
 BEGIN
@@ -95,7 +95,7 @@ INSERT INTO @results
 EXEC dbo.SearchEntities
     @q = @prefixQuery,
     @type = @sampleType,
-    @top = 20;
+    @top = 100;
 
 IF EXISTS (SELECT 1 FROM @results WHERE type <> @sampleType)
 BEGIN

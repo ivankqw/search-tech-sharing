@@ -7,6 +7,7 @@ End-to-end playground for executing the “LIKE-but-snappy” name search projec
 - Docker and Docker Compose v2
 - ~6 GB of free memory for SQL Server + sample data
 - GNU Make (optional but recommended for the helper targets)
+- [uv](https://github.com/astral-sh/uv) for Python dependency management
 
 Everything runs locally—no external cloud resources or network calls are required once the container image is built.
 
@@ -41,34 +42,92 @@ make down     # Stop and remove the container + network
 
 The default SA password is `Your_password123`. Adjust `SA_PASSWORD` in the `Makefile` or override on the command line: `make SA_PASSWORD=BetterPass all`.
 
-## Working with the Real 23.8M CSV
+## Working with Larger Datasets
+
+### 23.8 M Companies CSV
 
 1. Copy `free_company_dataset.csv` into `./data/`. The compose file mounts this directory read-only at `/data` inside the container.
 2. Start the stack and rebuild the schema without synthetic rows:
    ```bash
    make up wait schema
    ```
-3. (One-time) Normalize quoting quirks into `free_company_dataset_clean.csv`:
+3. (One-time) Normalize quoting quirks into `free_company_dataset_clean.tsv`:
    ```bash
    python3 scripts/prepare_company_dataset.py
    ```
-4. Load the CSV (≈23.8 M companies):
+4. Load the TSV (≈23.8 M companies):
    ```bash
    make load_csv
    ```
    The script lands raw data into `dbo.RawCompanies`, truncates `dbo.Entities`, and repopulates it with normalized names + concatenated metadata in `alt_names`.
-5. Rebuild the full-text catalog and run smoke tests:
+5. (Optional) Downsample to a smaller but representative slice (default 6 M rows) before building the full-text index:
+   ```bash
+   docker compose exec -T sqlserver \
+     /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U SA -P Your_password123 \
+     -d SearchDemo -i /scripts/sample_entities.sql -v SampleSize=6000000
+   ```
+6. Rebuild the full-text catalog and run smoke tests (rerun after sampling if you took that step):
    ```bash
    make fts test
    ```
 
+### Replicating the INSO Dataset Locally
+
+The repository now includes the real INSO entities (companies, investors, funds, people). To refresh the container with the latest production snapshot:
+
+1. Install the Microsoft ODBC Driver 18 for SQL Server (runtime) and install the project’s Python dependencies:
+   ```bash
+   uv sync
+   ```
+2. Ensure the container is running (`make up wait`) and port `14333` is published.
+3. Run the replication script (reads credentials from `.env` by default):
+   ```bash
+   uv run python scripts/replicate_inso_entities.py --dest-password Your_password123
+   ```
+4. Rebuild the full-text catalog/procedure:
+   ```bash
+   make fts
+   ```
+
+The script truncates and reloads `dbo.Entities`, then the updated `create_fulltext.sql` rebuilds the catalog with sanitized token handling. Benchmark results are captured in `docs/experiments/fts-vs-like-inso-2025-11-03.md` with the raw SQL output in `results/fts_vs_like_inso_raw.txt`.
+
 For incremental refreshes in a real deployment, switch the full-text index to `CHANGE_TRACKING = AUTO` (already set) and feed inserts/updates through regular DML or Change Tracking/CDC pipelines.
 
-## Retool / API Integration
+## Demo API (FastAPI)
 
-- The stored procedure `dbo.SearchEntities` already applies lexical prefix search with ranking boosts for exact matches, token prefixes, and optional type filters.
-- Surface it through a thin API (e.g., `/search?q=&type=&top=`) or call it directly from Retool using a parameterized query.
-- Debounce typeahead invocations in the UI (150–250 ms) to keep latency below tens of milliseconds at the database.
+A lightweight FastAPI service exposes the two search paths over HTTP for demos and Retool integration.
+
+1. Make sure dependencies are installed (`uv sync`) and, if you prefer, activate the virtual environment:
+   ```bash
+   uv sync
+   source .venv/bin/activate  # optional
+   ```
+2. Export connection overrides if needed (defaults match the docker-compose setup):
+   ```bash
+   export SQLSERVER_HOST=localhost
+   export SQLSERVER_PORT=14333
+   export SQLSERVER_USER=SA
+   export SQLSERVER_PASSWORD=Your_password123
+   export SQLSERVER_DATABASE=SearchDemo
+   export SQLSERVER_ENCRYPT=no
+   export SQLSERVER_TRUST_SERVER_CERTIFICATE=yes
+   ```
+3. Launch the API:
+   ```bash
+   uv run uvicorn service.main:app --reload
+   ```
+4. Example requests:
+   ```bash
+   curl -X POST http://localhost:8000/api/search/fts \
+        -H "Content-Type: application/json" \
+        -d '{"query": "appli", "top": 10}'
+
+   curl -X POST http://localhost:8000/api/search/prefix \
+        -H "Content-Type: application/json" \
+        -d '{"query": "appli", "top": 10}'
+   ```
+
+Use ngrok (or similar) to expose `localhost:8000` and wire the endpoints into Retool. Both endpoints return the same response shape (`{query, type, top, source, duration_ms, results[]}`) so the UI can toggle between FTS and `LIKE` easily.
 
 ## Project Structure
 
@@ -78,7 +137,11 @@ For incremental refreshes in a real deployment, switch the full-text index to `C
 - `scripts/create_fulltext.sql` – Drops/rebuilds the FTS catalog + index and deploys `dbo.SearchEntities`; waits for the population to finish.
 - `scripts/test_fulltext.sql` – SMOKE checks executed via `make test`.
 - `scripts/load_companies_from_csv.sql` – Bulk import + normalization pipeline for `free_company_dataset.csv`.
-- `scripts/run_experiments.sql` – Benchmarks FTS vs. `LIKE` prefix/contains and prints summary stats + sample results.
+- `scripts/run_experiments.sql` – Benchmarks FTS vs. `LIKE` prefix/contains and prints summary stats.
+- `scripts/replicate_inso_entities.py` – Copies the latest INSO entities from Azure SQL into the local container.
+- `docs/experiments/fts-vs-like-2025-10-31.md` – Historical benchmark on the 6 M company sample.
+- `docs/experiments/fts-vs-like-inso-2025-11-03.md` – Latest benchmark on the INSO dataset.
+- `service/main.py` – FastAPI wrapper exposing `/api/search/fts` and `/api/search/prefix`.
 - `docs/name-search-briefing.md` – Slide-ready briefing supplied earlier.
 
 ## Clean Up

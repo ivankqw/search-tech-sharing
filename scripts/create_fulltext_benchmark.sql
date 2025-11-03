@@ -1,54 +1,57 @@
-:setvar TargetDb SearchDemo
-
-USE $(TargetDb);
+USE SearchBenchmark;
 GO
 
 IF EXISTS (SELECT 1 FROM sys.fulltext_indexes WHERE object_id = OBJECT_ID(N'dbo.Entities'))
 BEGIN
-    PRINT N'Dropping existing full-text index on dbo.Entities...';
+    PRINT N'Dropping existing full-text index on dbo.Entities (SearchBenchmark)...';
     DROP FULLTEXT INDEX ON dbo.Entities;
 END
 GO
 
-IF EXISTS (SELECT 1 FROM sys.fulltext_catalogs WHERE name = N'ft_main')
+IF EXISTS (SELECT 1 FROM sys.fulltext_catalogs WHERE name = N'ft_benchmark')
 BEGIN
-    PRINT N'Dropping full-text catalog ft_main...';
-    DROP FULLTEXT CATALOG ft_main;
+    PRINT N'Dropping full-text catalog ft_benchmark...';
+    DROP FULLTEXT CATALOG ft_benchmark;
 END
 GO
 
-PRINT N'Creating full-text catalog ft_main...';
-CREATE FULLTEXT CATALOG ft_main WITH ACCENT_SENSITIVITY = OFF;
+PRINT N'Creating full-text catalog ft_benchmark...';
+CREATE FULLTEXT CATALOG ft_benchmark WITH ACCENT_SENSITIVITY = OFF;
 GO
 
-PRINT N'Creating full-text index on dbo.Entities...';
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_Entities_Id')
+BEGIN
+    PRINT N'Creating unique index UX_Entities_Id for full-text key...';
+    CREATE UNIQUE INDEX UX_Entities_Id ON dbo.Entities (id);
+END
+
+PRINT N'Creating full-text index on dbo.Entities (SearchBenchmark)...';
 CREATE FULLTEXT INDEX ON dbo.Entities
 (
     name LANGUAGE 1033,
     alt_names LANGUAGE 1033
 )
-KEY INDEX PK_Entities
-ON ft_main
+KEY INDEX UX_Entities_Id ON ft_benchmark
 WITH STOPLIST = OFF, CHANGE_TRACKING = AUTO;
 GO
 
-DECLARE @populate_status INT = FULLTEXTCATALOGPROPERTY(N'ft_main', N'PopulateStatus');
+DECLARE @populate_status INT = FULLTEXTCATALOGPROPERTY(N'ft_benchmark', N'PopulateStatus');
 WHILE @populate_status <> 0
 BEGIN
     WAITFOR DELAY '00:00:01';
-    SET @populate_status = FULLTEXTCATALOGPROPERTY(N'ft_main', N'PopulateStatus');
+    SET @populate_status = FULLTEXTCATALOGPROPERTY(N'ft_benchmark', N'PopulateStatus');
 END
-PRINT N'Full-text catalog ft_main population complete.';
+PRINT N'Full-text catalog ft_benchmark population complete.';
 GO
 
 IF OBJECT_ID(N'dbo.SearchEntities', N'P') IS NOT NULL
 BEGIN
-    PRINT N'Dropping stored procedure dbo.SearchEntities...';
+    PRINT N'Dropping stored procedure dbo.SearchEntities (SearchBenchmark)...';
     DROP PROC dbo.SearchEntities;
 END
 GO
 
-PRINT N'Creating stored procedure dbo.SearchEntities...';
+PRINT N'Creating stored procedure dbo.SearchEntities (SearchBenchmark)...';
 GO
 CREATE PROC dbo.SearchEntities
     @q    NVARCHAR(100),
@@ -159,13 +162,13 @@ BEGIN
         FROM CONTAINSTABLE(dbo.Entities, (name, alt_names), @fts)
     )
     SELECT TOP (@top)
-            e.id,
-            e.type,
-            e.name,
-            e.alt_names,
-            e.country,
-            h.rank_score,
-            h.rank_score
+        e.id,
+        e.type,
+        e.name,
+        e.alt_names,
+        e.country,
+        h.rank_score,
+        h.rank_score
             + CASE
                   WHEN e.name = @normalized THEN 1000
                   WHEN @first_token IS NOT NULL AND e.name = @first_token THEN 950
@@ -185,4 +188,4 @@ BEGIN
 END;
 GO
 
-PRINT N'Full-text configuration complete.';
+PRINT N'SearchBenchmark full-text configuration complete.';
