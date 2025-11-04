@@ -14,33 +14,34 @@ Environment: local SQL Server 2022 container (Linux) populated from `sqldb-inso-
 
 | Method | Samples | Min ms | P50 ms | P95 ms | Avg ms | Max ms | Avg Rows |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `fts_typeahead` (`dbo.SearchEntities`) | 50 | 0.000 | 4.243 | 13.055 | 4.911 | 59.480 | 4.00 |
-| `like_prefix` (`name LIKE 'prefix%'`) | 50 | 0.000 | 0.000 | 0.000 | 0.082 | 4.107 | 1.00 |
-| `like_infix` (`name LIKE '%term%'`) | 33 | 4.248 | 187.712 | 397.636 | 211.971 | 423.293 | 1.00 |
+| `fts_typeahead` (`dbo.SearchEntities`) | 50 | 0.000 | 4.309 | 13.002 | 8.749 | 234.109 | 4.00 |
+| `like_prefix` (`name LIKE 'prefix%'`) | 50 | 0.000 | 0.000 | 2.392 | 0.262 | 4.384 | 1.00 |
+| `like_infix` (`name LIKE '%term%'`) | 33 | 4.348 | 199.623 | 440.838 | 227.840 | 456.507 | 1.00 |
 
 ## Slowest Queries (Per Method)
 
 | Method | Query | Duration ms | Rows |
 | --- | --- | ---: | ---: |
-| `fts_typeahead` | `100%` | 59.480 | 10 |
-| `fts_typeahead` | `appli` | 20.981 | 10 |
-| `fts_typeahead` | `1000` | 16.701 | 10 |
-| `fts_typeahead` | `zero` | 8.599 | 10 |
-| `fts_typeahead` | `0xppl` | 8.560 | 2 |
-| `like_infix` | `0te` | 423.293 | 1 |
-| `like_infix` | `00m` | 405.626 | 1 |
-| `like_infix` | `iqin` | 392.310 | 1 |
-| `like_infix` | `xky` | 386.915 | 1 |
-| `like_infix` | `00fa` | 384.445 | 1 |
-| `like_prefix` | `appli` | 4.107 | 1 |
+| `fts_typeahead` | `100%` | 234.109 | 10 |
+| `fts_typeahead` | `1000` | 26.194 | 10 |
+| `fts_typeahead` | `1010` | 13.006 | 10 |
+| `fts_typeahead` | `zero` | 12.997 | 10 |
+| `fts_typeahead` | `zero` | 12.852 | 10 |
+| `like_infix` | `006` | 456.507 | 1 |
+| `like_infix` | `0si` | 446.021 | 1 |
+| `like_infix` | `00tr` | 437.383 | 1 |
+| `like_infix` | `xpp` | 416.445 | 1 |
+| `like_infix` | `00fa` | 409.906 | 1 |
+| `like_prefix` | `split` | 4.384 | 1 |
+| `like_prefix` | `1055` | 4.353 | 1 |
+| `like_prefix` | `appli` | 4.350 | 1 |
 | `like_prefix` | `sheng` | 0.000 | 1 |
 | `like_prefix` | `01ai` | 0.000 | 1 |
-| `like_prefix` | `011h` | 0.000 | 1 |
-| `like_prefix` | `zero` | 0.000 | 1 |
 
 ## Notes
 
 - Roughly half of the expected company rows were absent in this snapshot (115,641 vs. 231,280). Follow up with the upstream view (`PowerApps.LastCompanyEnriched`) to confirm whether blanks/null names were removed mid-snapshot or whether additional filters are needed.
-- FTS still keeps P95 under 14 ms, with one heavy query (`100%`) at ~59 ms; the shorter average row count (≈4) suggests fewer alternate name matches after the reduced dataset.
+- Updated `dbo.SearchEntities` now treats corporate suffixes (`inc`, `ltd`, `llc`, `company`, etc.) as optional tokens so queries like “stripe company” match on the meaningful term while still rewarding additional words when present.
+- FTS keeps P95 at ≈13 ms with one outlier (`100%`) where the optional token list still explodes; debounce client calls around 200 ms to smooth out spikes.
 - Prefix `LIKE` remains effectively instantaneous because it hits the clustered index and returns single rows, but it offers no ranking.
-- Infix `LIKE` continues to scan, holding P95 just under 0.4 s on ~274 K rows—illustrating the need for FTS (or a search service) for substring queries.
+- Infix `LIKE` continues to scan, holding P95 just under 0.45 s on ~274 K rows—illustrating the need for FTS (or a search service) for substring queries.

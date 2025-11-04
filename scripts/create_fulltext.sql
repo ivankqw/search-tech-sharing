@@ -101,20 +101,96 @@ BEGIN
     DECLARE @fts NVARCHAR(4000);
     DECLARE @first_token NVARCHAR(100);
 
-    SELECT TOP (1)
-        @first_token = value
+    DECLARE @filler TABLE (token NVARCHAR(32) PRIMARY KEY);
+    INSERT INTO @filler (token)
+    VALUES
+        (N'the'),
+        (N'and'),
+        (N'co'),
+        (N'coo'),
+        (N'company'),
+        (N'corp'),
+        (N'corporation'),
+        (N'group'),
+        (N'holdings'),
+        (N'inc'),
+        (N'incorporated'),
+        (N'llc'),
+        (N'ltd'),
+        (N'limited'),
+        (N'plc'),
+        (N'sa'),
+        (N'sas'),
+        (N'spa'),
+        (N'ag'),
+        (N'gmbh'),
+        (N'bv'),
+        (N'sarl'),
+        (N'de'),
+        (N'la');
+
+    DECLARE @split TABLE
+    (
+        ordinal INT PRIMARY KEY,
+        token   NVARCHAR(100)
+    );
+    DECLARE @raw_tokens TABLE
+    (
+        ordinal INT PRIMARY KEY,
+        token   NVARCHAR(100)
+    );
+    DECLARE @tokens TABLE
+    (
+        ordinal INT PRIMARY KEY,
+        token   NVARCHAR(100)
+    );
+
+    INSERT INTO @split (ordinal, token)
+    SELECT
+        ROW_NUMBER() OVER (ORDER BY ordinal) AS ordinal,
+        LOWER(value) AS token
     FROM STRING_SPLIT(@sanitized, N' ', 1)
-    WHERE value IS NOT NULL AND value <> N''
+    WHERE value IS NOT NULL AND value <> N'';
+
+    INSERT INTO @raw_tokens (ordinal, token)
+    SELECT s.ordinal, s.token
+    FROM @split AS s;
+
+    INSERT INTO @tokens (ordinal, token)
+    SELECT s.ordinal, s.token
+    FROM @split AS s
+    WHERE LEN(s.token) >= 3
+      AND NOT EXISTS (SELECT 1 FROM @filler AS f WHERE f.token = s.token);
+
+    SELECT TOP (1) @first_token = token
+    FROM @raw_tokens
     ORDER BY ordinal;
 
-    ;WITH filtered AS
-    (
-        SELECT value
-        FROM STRING_SPLIT(@sanitized, N' ', 1)
-        WHERE value IS NOT NULL AND value <> N'' AND LEN(value) >= 3
-    )
-    SELECT @fts = STRING_AGG(N'"' + REPLACE(value, '"', '""') + N'*"', N' AND ')
-    FROM filtered;
+    DECLARE @required NVARCHAR(100) = (
+        SELECT TOP (1) token
+        FROM @tokens
+        ORDER BY ordinal
+    );
+
+    IF @required IS NULL
+    BEGIN
+        SET @required = @first_token;
+    END;
+
+    DECLARE @optional NVARCHAR(4000) = NULL;
+    SELECT @optional = STRING_AGG(N'"' + REPLACE(token, '"', '""') + N'*"', N' OR ')
+    FROM @tokens
+    WHERE token IS NOT NULL
+      AND token <> @required;
+
+    IF @required IS NOT NULL
+    BEGIN
+        SET @fts = N'"' + REPLACE(@required, '"', '""') + N'*"';
+        IF @optional IS NOT NULL
+        BEGIN
+            SET @fts = @fts + N' AND (' + @optional + N')';
+        END;
+    END
 
     IF @fts IS NULL
     BEGIN

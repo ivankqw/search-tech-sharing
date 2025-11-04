@@ -6,6 +6,8 @@ from contextlib import contextmanager
 from typing import Generator, List, Literal, Optional
 
 import pyodbc
+import logging
+
 from fastapi import Depends, FastAPI, HTTPException, status
 from pydantic import BaseModel, Field
 
@@ -80,6 +82,8 @@ class SearchResponse(BaseModel):
 
 
 app = FastAPI(title="Search Demo API", version="1.0.0")
+logger = logging.getLogger("search-service")
+logging.basicConfig(level=logging.INFO)
 
 
 @app.get("/healthz", status_code=status.HTTP_200_OK)
@@ -100,6 +104,7 @@ def search_fts(
     request: SearchRequest,
     conn: pyodbc.Connection = Depends(get_connection),
 ) -> SearchResponse:
+    logger.info("fts query=%r type=%r top=%s", request.query, request.type, request.top)
     start = time.perf_counter()
     cursor = conn.cursor()
     try:
@@ -121,6 +126,11 @@ def search_fts(
         )
         for row in rows
     ]
+    logger.info(
+        "fts result count=%d top_names=%s",
+        len(results),
+        [result.name for result in results[:3]],
+    )
 
     return SearchResponse(
         query=request.query,
@@ -141,6 +151,7 @@ def search_prefix(
     if not prefix:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Query must not be empty.")
 
+    logger.info("prefix query=%r type=%r top=%s", request.query, request.type, request.top)
     start = time.perf_counter()
     cursor = conn.cursor()
     try:
@@ -167,6 +178,11 @@ def search_prefix(
         )
         for row in rows
     ]
+    logger.info(
+        "prefix result count=%d top_names=%s",
+        len(results),
+        [result.name for result in results[:3]],
+    )
 
     return SearchResponse(
         query=request.query,
